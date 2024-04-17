@@ -1,0 +1,99 @@
+import itertools, os, pygame, random
+from Card import *
+from Settings import *
+
+class Hand:
+    def __init__(self):
+        self.display_surface = pygame.display.get_surface()
+        self.winner = None
+        self.font = pygame.font.Font(GAME_FONT, 120)
+        self.win_rotation_angle = random.uniform(-10, 10)
+        self.players = [Player() for _ in range(2)]
+        self.flop = Flop()
+        self.turn = None
+        self.river = None
+        self.community_cards = [self.flop, self.turn, self.river]
+
+    def start_hand(self):
+        self.dealer = Dealer(self.players, self.community_cards)
+        self.dealer.start_new_hand()
+
+    def update(self):
+        self.dealer.update()
+        self.render_cards()
+        self.render_winner()
+
+    def render_cards(self):
+        for player in self.players:
+            for card in player.cards:
+                self.display_surface.blit(card.card_surf, card.start_position)
+        for card in self.flop.cards + (self.turn.cards if self.turn else []) + (self.river.cards if self.river else []):
+            self.display_surface.blit(card.card_surf, card.position)
+
+    def render_winner(self):
+        if self.dealer.determined_winner is not None:
+            text = f"{self.dealer.determined_winner} Wins!"
+            text_color = (115, 235, 0) if self.dealer.determined_winner == "Player 1" else (135, 206, 235)
+            coordinates = (0, 100)
+            text_surface = self.font.render(text, True, text_color)
+            text_rect = text_surface.get_rect()
+            text_rect.topleft = coordinates
+            rotated_surface = pygame.transform.rotate(text_surface, self.win_rotation_angle)
+            rotated_rect = rotated_surface.get_rect(center=text_rect.center)
+            self.display_surface.blit(rotated_surface, rotated_rect)
+
+
+class Dealer:
+    def __init__(self, players, community_cards):
+        self.determined_winner = None
+        self.players = players
+        self.community_cards = community_cards
+        self.deck = self.generate_deck()
+        self.current_round = 0  # 0 for pre-flop, 1 for flop, 2 for turn, 3 for river
+        self.deal_hole_cards()
+
+    def generate_deck(self):
+        fresh_deck = [Card(value, suit) for value in value_dict.keys() for suit in cardsuits]
+        random.shuffle(fresh_deck)
+        return fresh_deck
+
+    def deal_hole_cards(self):
+        for player in self.players:
+            for _ in range(2):
+                card = self.deck.pop()
+                player.cards.append(card)
+
+    def start_new_hand(self):
+        self.current_round = 0
+        self.deck = self.generate_deck()
+        self.determined_winner = None
+        for player in self.players:
+            player.cards.clear()
+        self.deal_hole_cards()
+
+    def update(self):
+        if self.current_round == 0 and len(self.community_cards[0].cards) < 3:
+            self.deal_community_cards(3)
+        elif self.current_round == 1 and len(self.community_cards[1].cards) < 1:
+            self.deal_community_cards(1)
+        elif self.current_round == 2 and len(self.community_cards[2].cards) < 1:
+            self.deal_community_cards(1)
+
+    def deal_community_cards(self, num_cards):
+        for _ in range(num_cards):
+            card = self.deck.pop()
+            self.community_cards[self.current_round].cards.append(card)
+        self.current_round += 1
+
+    def eval_winner(self, hand_to_eval):
+        eval_cards = [(value_dict[x[0]], x[1]) for x in hand_to_eval]
+        if self.eval_hand(eval_cards[:5]) > self.eval_hand(eval_cards[5:]):
+            return "Player 1"
+        elif self.eval_hand(eval_cards[:5]) < self.eval_hand(eval_cards[5:]):
+            return "Player 2"
+        else:
+            return "Tie"
+
+    def eval_hand(self, hand):
+        # Your hand evaluation logic here
+        pass  # Placeholder for hand evaluation logic
